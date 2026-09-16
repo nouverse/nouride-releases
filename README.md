@@ -7,7 +7,7 @@
 - 🌐 **Website:** [nouride.com](https://nouride.com)
 - 📖 **Documentation:** [nouride.com/docs](https://nouride.com/en/docs/start/what-is-nouride/)
 - 🚀 **Getting Started:** [nouride.com/docs/start/first-run](https://nouride.com/en/docs/start/first-run/)
-- 📦 **Docker Container:** `ghcr.io/nouverse/nouride:latest`
+- 📦 **Docker Container:** `ghcr.io/nouverse/nouride:latest` — or `ghcr.io/nouverse/nouride-router:latest` with the Nougate AI Router built in
 
 ---
 
@@ -64,6 +64,61 @@ services:
       - /srv/nouride/.nouride:/srv/nouride/.nouride
 ```
 
+#### Variant: Nougate AI Router
+
+`nouride-router` is the same build **plus the Nougate AI Router in the same process** — model calls
+answered from inside the daemon, with no second container and no network hop. Useful on a Pi, an LXC
+container, or anywhere that has to answer without a gateway in front of it.
+
+```bash
+docker run -d \
+  --name nouride \
+  --restart unless-stopped \
+  -p 18254:18254 \
+  -v /srv/nouride/.nouride:/srv/nouride/.nouride \
+  ghcr.io/nouverse/nouride-router:latest
+```
+
+Docker Compose:
+
+```yaml
+services:
+  nouride:
+    image: ghcr.io/nouverse/nouride-router:latest
+    container_name: nouride
+    restart: unless-stopped
+    ports:
+      - "18254:18254"
+    volumes:
+      - /srv/nouride/.nouride:/srv/nouride/.nouride
+```
+
+The Router's own port is not published: it answers the daemon inside the same container.
+
+Switch the Router on and point a provider at it, in `.nouride/config.toml`:
+
+```toml
+[nougate]
+in_process = true
+port = 18256
+
+[providers.local]
+kind = "openai"
+base_url = "http://127.0.0.1:18256/openai/v1"   # or /anthropic/v1
+```
+
+It binds loopback deliberately — a gateway hosted inside the daemon exists to serve that daemon. Its
+admin console is on the same port at `/frontend/`, and the setup wizard finds it, fills the endpoint
+in, and links to it.
+
+Both images are tagged `:X.Y.Z`, `:X.Y` and `:latest`. To see which variant an image is without
+pulling it:
+
+```bash
+docker image inspect ghcr.io/nouverse/nouride-router:latest \
+  --format '{{index .Config.Labels "tech.nouverse.nouride.edition"}}'
+```
+
 ---
 
 ### 3. Standalone Binary Downloads
@@ -77,9 +132,25 @@ Standalone tarballs include the executable, built-in skills, example configurati
 | Linux (Alpine) | `x86_64` | musl | [`nouride-linux-x64-musl.tar.gz`](https://get.nouride.com/latest/nouride-linux-x64-musl.tar.gz) |
 | Linux (Alpine) | `aarch64` | musl | [`nouride-linux-arm64-musl.tar.gz`](https://get.nouride.com/latest/nouride-linux-arm64-musl.tar.gz) |
 
+The Router variant ships the same four targets, named `nouride-router-*`:
+
+| Platform | Architecture | C Library | Download |
+|---|---|---|---|
+| Linux | `x86_64` | glibc | [`nouride-router-linux-x64.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-x64.tar.gz) |
+| Linux | `aarch64` | glibc | [`nouride-router-linux-arm64.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-arm64.tar.gz) |
+| Linux (Alpine) | `x86_64` | musl | [`nouride-router-linux-x64-musl.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-x64-musl.tar.gz) |
+| Linux (Alpine) | `aarch64` | musl | [`nouride-router-linux-arm64-musl.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-arm64-musl.tar.gz) |
+
+Or let the installer fetch it:
+
+```bash
+curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --variant router
+```
+
 > **Note on Alpine / Musl:** The `-musl` build requires `libstdc++` (`apk add libstdc++`).
 
-SHA256 checksums are attached to every release as `SHA256SUMS`.
+SHA256 checksums are attached to every release — `SHA256SUMS` for the standard build,
+`SHA256SUMS-router` for the Router variant.
 
 ---
 
