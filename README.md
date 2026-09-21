@@ -33,6 +33,14 @@ By default, the installer binds the web dashboard to loopback (`127.0.0.1:18254`
 curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --host 0.0.0.0
 ```
 
+For the **Router edition** (bundled with the in-process Nougate LLM Gateway and Web Admin Console):
+
+```bash
+curl -fsSL https://get.nouride.com/router.sh | sudo sh
+# or expose on LAN:
+curl -fsSL https://get.nouride.com/router.sh | sudo sh -s -- --host 0.0.0.0
+```
+
 Once installed, visit `http://<your-ip>:18254/` in your browser to complete initial setup.
 
 ---
