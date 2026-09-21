@@ -42,11 +42,12 @@ Once installed, visit `http://<your-ip>:18254/` in your browser to complete init
 The official multi-arch container image (`linux/amd64` and `linux/arm64`) is published to GitHub Container Registry:
 
 ```bash
+mkdir -p ~/nouride && cd ~/nouride
 docker run -d \
   --name nouride \
   --restart unless-stopped \
   -p 18254:18254 \
-  -v /srv/nouride/.nouride:/srv/nouride/.nouride \
+  -v "$PWD/nouride:/app/.nouride" \
   ghcr.io/nouverse/nouride:latest
 ```
 
@@ -61,7 +62,7 @@ services:
     ports:
       - "18254:18254"
     volumes:
-      - /srv/nouride/.nouride:/srv/nouride/.nouride
+      - ./nouride:/app/.nouride
 ```
 
 #### Variant: Nougate AI Router
@@ -71,11 +72,12 @@ answered from inside the daemon, with no second container and no network hop. Us
 container, or anywhere that has to answer without a gateway in front of it.
 
 ```bash
+mkdir -p ~/nouride && cd ~/nouride
 docker run -d \
   --name nouride \
   --restart unless-stopped \
   -p 18254:18254 \
-  -v /srv/nouride/.nouride:/srv/nouride/.nouride \
+  -v "$PWD/nouride:/app/.nouride" \
   ghcr.io/nouverse/nouride-router:latest
 ```
 
@@ -90,7 +92,7 @@ services:
     ports:
       - "18254:18254"
     volumes:
-      - /srv/nouride/.nouride:/srv/nouride/.nouride
+      - ./nouride:/app/.nouride
 ```
 
 The Router's own port is not published: it answers the daemon inside the same container.
