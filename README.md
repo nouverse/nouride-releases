@@ -77,6 +77,7 @@ docker run -d \
   --name nouride \
   --restart unless-stopped \
   -p 18254:18254 \
+  -p 18256:18256 \
   -v "$PWD/nouride:/app/.nouride" \
   ghcr.io/nouverse/nouride-router:latest
 ```
@@ -91,27 +92,28 @@ services:
     restart: unless-stopped
     ports:
       - "18254:18254"
+      - "18256:18256"
     volumes:
       - ./nouride:/app/.nouride
 ```
 
-The Router's own port is not published: it answers the daemon inside the same container.
+In the Router edition (`ghcr.io/nouverse/nouride-router`), the in-process Nougate gateway is **enabled by default** on port `18256` and unifies its persistent state inside `./nouride/data/nougate.db`. Its web admin console is available at `http://<your-ip>:18256/frontend/`.
 
-Switch the Router on and point a provider at it, in `.nouride/config.toml`:
+Point a provider at it in `.nouride/config.toml`:
 
 ```toml
-[nougate]
-in_process = true
-port = 18256
-
 [providers.local]
 kind = "openai"
 base_url = "http://127.0.0.1:18256/openai/v1"   # or /anthropic/v1
 ```
 
-It binds loopback deliberately — a gateway hosted inside the daemon exists to serve that daemon. Its
-admin console is on the same port at `/frontend/`, and the setup wizard finds it, fills the endpoint
-in, and links to it.
+To explicitly configure or switch it off, use `[nougate]` in `.nouride/config.toml` (or set `NOUGATE_IN_PROCESS=false` in `.env`):
+
+```toml
+[nougate]
+in_process = false
+port = 18256
+```
 
 Both images are tagged `:X.Y.Z`, `:X.Y` and `:latest`. To see which variant an image is without
 pulling it:
