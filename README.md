@@ -41,7 +41,9 @@ curl -fsSL https://get.nouride.com/install-bundle-router.sh | sudo sh
 curl -fsSL https://get.nouride.com/install-bundle-router.sh | sudo sh -s -- --host 0.0.0.0
 ```
 
-Once installed, visit `http://<your-ip>:18254/` in your browser to complete initial setup.
+Once installed, open `http://127.0.0.1:18254/` on that machine — or `http://<your-ip>:18254/` if you
+installed with `--host 0.0.0.0` — to complete setup. The first-run password is printed by the installer
+and in the service log (`journalctl -u nouride | grep -A6 'Nouride is ready'`).
 
 ---
 
@@ -57,6 +59,8 @@ docker run -d \
   -p 18254:18254 \
   -v "$PWD/nouride:/app/.nouride" \
   ghcr.io/nouverse/nouride:latest
+
+docker logs -f nouride          # the first-run password is printed here
 ```
 
 Docker Compose:
@@ -105,7 +109,7 @@ services:
       - ./nouride:/app/.nouride
 ```
 
-In the Router edition (`ghcr.io/nouverse/nouride-router`), the in-process Nougate gateway is **enabled by default** on port `18256` and unifies its persistent state inside `./nouride/data/nougate.db`. Its web admin console is available at `http://<your-ip>:18256/frontend/`.
+In the Router edition (`ghcr.io/nouverse/nouride-router`), the in-process Nougate gateway is **enabled by default** on port `18256` and keeps its state — accounts, providers, `nougate.db` — in a folder of its own inside the same volume: `./nouride/nougate/data/`. Nothing else to mount. Its web admin console is available at `http://<your-ip>:18256/frontend/`.
 
 Point a provider at it in `.nouride/config.toml`:
 
@@ -115,7 +119,7 @@ kind = "openai"
 base_url = "http://127.0.0.1:18256/openai/v1"   # or /anthropic/v1
 ```
 
-To explicitly configure or switch it off, use `[nougate]` in `.nouride/config.toml` (or set `NOUGATE_IN_PROCESS=false` in `.env`):
+To explicitly configure or switch it off, use `[nougate]` in `.nouride/config.toml` (or set `NOUGATE_IN_PROCESS=false` in the daemon's environment):
 
 ```toml
 [nougate]
@@ -123,8 +127,13 @@ in_process = false
 port = 18256
 ```
 
-Both images are tagged `:X.Y.Z`, `:X.Y` and `:latest`. To see which variant an image is without
-pulling it:
+Use `:latest`. To update, pull it again and recreate the container — the volume keeps everything:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+To see which variant an image is without pulling it:
 
 ```bash
 docker image inspect ghcr.io/nouverse/nouride-router:latest \
