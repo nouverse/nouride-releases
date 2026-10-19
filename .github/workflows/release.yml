@@ -1,0 +1,224 @@
+# The public half of a Nouride release: test what was built, build the public images, publish.
+#
+# Started by the private repository's release workflow once it has built and signed a release, never by anything
+# here: no push, no pull request, no schedule. It holds no secret — only this repository's own GITHUB_TOKEN — and no
+# source: everything it tests or builds is an asset of the release's draft, listed in a checksum file the private
+# repository signed, and `scripts/verify-sums.sh` checks that signature with the keys every Nouride install trusts
+# before anything is run or built from it.
+#
+#   tarballs   each public tarball, started on the platform it is for — native x64 and arm64 runners, Alpine for the
+#              musl builds, macOS for darwin — and asked /health, --version and `nouride status`
+#   images     `nouride` and `nouride-router`, from the signed image kit, natively per architecture (no emulation),
+#              pushed as `<version>-amd64` and `<version>-arm64`; the image's bundle must be the kit's, byte for byte
+#   manifest   one multi-arch tag per edition — `<version>`, `<major>.<minor>`, and `latest` unless the release is quiet
+#   publish    the draft becomes the release, once everything above passed
+#
+# Why it is here: GitHub's runners are free for public repositories, native arm64 and macOS included, and the
+# images were the longest part of a release on the private side's single build runner, under emulation.
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag, e.g. v0.7.20
+        required: true
+      quiet:
+        description: "yes for a quiet release: published as a pre-release, no `latest` tag"
+        required: false
+        default: "no"
+      rehearsal:
+        description: >-
+          yes to rehearse on a draft that copies a published release's signed assets (the tag names the draft, `version`
+          the release): tarballs are tested for real; images are that release's own, re-tagged `rehearsal-*` to prove
+          the push and the manifest; nothing is published. Delete the draft and the `rehearsal-*` tags after.
+        required: false
+        default: "no"
+      version:
+        description: The version the tarballs report — the tag without its `v` unless rehearsing
+        required: false
+        default: ""
+
+permissions: {}
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag }}
+  REHEARSAL: ${{ inputs.rehearsal }}
+  VERSION_IN: ${{ inputs.version }}
+
+jobs:
+  tarballs:
+    # Reading a draft release's assets needs write access to the repository; nothing is written here.
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [basic, router]
+        target: [linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl, darwin-arm64]
+        include:
+          - { target: linux-x64, os: ubuntu-24.04 }
+          - { target: linux-arm64, os: ubuntu-24.04-arm }
+          - { target: linux-x64-musl, os: ubuntu-24.04, alpine: true }
+          - { target: linux-arm64-musl, os: ubuntu-24.04-arm, alpine: true }
+          - { target: darwin-arm64, os: macos-15 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    name: tarball (${{ matrix.edition }}, ${{ matrix.target }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download and check its signature
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EDITION: ${{ matrix.edition }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          # macOS ships LibreSSL, which cannot check an Ed25519 signature over raw bytes; the runner has OpenSSL 3.
+          if [ -d /opt/homebrew/opt/openssl@3/bin ]; then export PATH="/opt/homebrew/opt/openssl@3/bin:$PATH"; fi
+          if [ "$EDITION" = basic ]; then file="nouride-${TARGET}.tar.gz"; sums=SHA256SUMS; else file="nouride-${EDITION}-${TARGET}.tar.gz"; sums="SHA256SUMS-${EDITION}"; fi
+          mkdir -p assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$sums" --pattern "$sums.sig" --dir assets
+          # A target this release does not build is not in its checksum file: nothing to test, and said.
+          if ! grep -q " \*\{0,1\}\(\./\)\{0,1\}${file}\$" "assets/$sums"; then
+            echo "::notice::$file is not in $sums — this release does not build $TARGET"
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$file" --dir assets
+          sh scripts/verify-sums.sh assets
+          echo "file=assets/$file" >> "$GITHUB_OUTPUT"
+      - name: Start it, and ask it what it is
+        if: steps.fetch.outputs.skip != 'yes'
+        env:
+          FILE: ${{ steps.fetch.outputs.file }}
+          EDITION: ${{ matrix.edition }}
+          ALPINE: ${{ matrix.alpine }}
+        run: |
+          version="${VERSION_IN:-${TAG#v}}"
+          if [ "$ALPINE" = true ]; then
+            # The musl build, on the C library it is for: Alpine, with the C++ runtime the install docs ask for.
+            docker run --rm -v "$PWD:/w" -w /w alpine:3.20 sh -c "apk add -q libstdc++ curl >/dev/null && sh scripts/smoke.sh '$FILE' '$version' '$EDITION'"
+          else
+            sh scripts/smoke.sh "$FILE" "$version" "$EDITION"
+          fi
+
+  images:
+    permissions:
+      contents: write # read the draft's assets
+      packages: write # push to ghcr.io/nouverse/nouride and nouride-router, which this repository owns
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [basic, router]
+        arch: [amd64, arm64]
+        include:
+          - { arch: amd64, os: ubuntu-24.04 }
+          - { arch: arm64, os: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    name: image (${{ matrix.edition }}, ${{ matrix.arch }})
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rehearsal — the published release's own image, re-tagged
+        if: inputs.rehearsal == 'yes'
+        env:
+          EDITION: ${{ matrix.edition }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          if [ "$EDITION" = basic ]; then pkg=nouride; else pkg="nouride-${EDITION}"; fi
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull --platform "linux/${ARCH}" "ghcr.io/nouverse/${pkg}:${VERSION_IN}"
+          docker tag "ghcr.io/nouverse/${pkg}:${VERSION_IN}" "ghcr.io/nouverse/${pkg}:rehearsal-${ARCH}"
+          docker push "ghcr.io/nouverse/${pkg}:rehearsal-${ARCH}"
+      - name: Download the image kit and check its signature
+        if: inputs.rehearsal != 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EDITION: ${{ matrix.edition }}
+        run: |
+          if [ "$EDITION" = basic ]; then kit=nouride-image-kit.tar.gz; sums=SHA256SUMS-image-kit; else kit="nouride-image-kit-${EDITION}.tar.gz"; sums="SHA256SUMS-image-kit-${EDITION}"; fi
+          mkdir -p assets kit
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$kit" --pattern "$sums" --pattern "$sums.sig" --dir assets
+          sh scripts/verify-sums.sh assets
+          tar -xzf "assets/$kit" -C kit
+          jq -e --arg e "$EDITION" --arg v "${TAG#v}" '.edition == $e and .version == $v' kit/kit.json
+      - name: Build and push
+        if: inputs.rehearsal != 'yes'
+        env:
+          EDITION: ${{ matrix.edition }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          if [ "$EDITION" = basic ]; then pkg=nouride; else pkg="nouride-${EDITION}"; fi
+          ref="ghcr.io/nouverse/${pkg}:${TAG#v}-${ARCH}"
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker buildx build kit --platform "linux/${ARCH}" --provenance=false --load -t "$ref" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.version=${TAG#v}"
+          # The bundle in the image is the kit's, byte for byte — the one the private source map was written for.
+          want=$(jq -r .bundleSha256 kit/kit.json)
+          got=$(docker run --rm --entrypoint sha256sum "$ref" /app/nouride.bundle.js | cut -d' ' -f1)
+          [ "$got" = "$want" ] || { echo "::error::the image's bundle is $got, the kit's is $want"; exit 1; }
+          # It starts, on a port of its own, and its CLI finds it from inside the container as a user would ask.
+          docker run -d --name smoke -e PORT=18301 -p 127.0.0.1:18301:18301 "$ref" >/dev/null
+          for _ in $(seq 1 60); do h=$(curl -fsS http://127.0.0.1:18301/health 2>/dev/null || true); case "$h" in *'"version"'*) case "$h" in *starting*) ;; *) break ;; esac ;; esac; sleep 1; done
+          echo "/health: $h"
+          case "$h" in *"\"version\":\"${TAG#v}\""*"\"edition\":\"${EDITION}\""*|*"\"edition\":\"${EDITION}\""*"\"version\":\"${TAG#v}\""*) ;; *) docker logs smoke | tail -20; echo "::error::the image did not answer as ${EDITION} ${TAG#v}"; exit 1 ;; esac
+          docker exec smoke nouride status
+          docker rm -f smoke >/dev/null
+          docker push "$ref"
+
+  manifest:
+    needs: images
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [basic, router]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    name: manifest (${{ matrix.edition }})
+    steps:
+      - name: One tag for both architectures
+        env:
+          EDITION: ${{ matrix.edition }}
+          QUIET: ${{ inputs.quiet }}
+        run: |
+          if [ "$EDITION" = basic ]; then pkg=nouride; else pkg="nouride-${EDITION}"; fi
+          version="${TAG#v}"
+          base="ghcr.io/nouverse/${pkg}"
+          tags="-t ${base}:${version} -t ${base}:${version%.*}"
+          [ "$QUIET" = yes ] || tags="$tags -t ${base}:latest"
+          if [ "$REHEARSAL" = yes ]; then version=rehearsal; tags="-t ${base}:rehearsal"; fi
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $tags "${base}:${version}-amd64" "${base}:${version}-arm64"
+          docker buildx imagetools inspect "${base}:${version}"
+          # Every platform of the published tag states its licence.
+          got=$(docker buildx imagetools inspect "${base}:${version}" --format '{{ json .Image }}' | jq -r '[ .. | objects | select(has("Labels")) | .Labels // {} | .["org.opencontainers.image.licenses"] ] | map(select(. != null)) | unique | join(",")')
+          [ "$got" = "LicenseRef-Proprietary" ] || { echo "::error::${base}:${version} is labelled '${got:-<none>}'"; exit 1; }
+
+  publish:
+    needs: [tarballs, manifest]
+    if: inputs.rehearsal != 'yes'
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: The draft becomes the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUIET: ${{ inputs.quiet }}
+        run: |
+          if [ "$QUIET" = yes ]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url
