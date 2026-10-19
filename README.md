@@ -36,9 +36,9 @@ curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --host 0.0.0.0
 For the **Router edition** (bundled with the in-process Nougate LLM Gateway and Web Admin Console):
 
 ```bash
-curl -fsSL https://get.nouride.com/install-bundle-router.sh | sudo sh
+curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --variant router
 # or expose on LAN:
-curl -fsSL https://get.nouride.com/install-bundle-router.sh | sudo sh -s -- --host 0.0.0.0
+curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --variant router --host 0.0.0.0
 ```
 
 Once installed, open `http://127.0.0.1:18254/` on that machine — or `http://<your-ip>:18254/` if you
