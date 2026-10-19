@@ -2,7 +2,7 @@
 
 > Official binary releases, container images, and distribution repository for [Nouride](https://nouride.com).
 
-[Nouride](https://nouride.com) is an ultra-lightweight, zero-bloat multi-agent AI engine in a single binary daemon. Built for servers, homelabs, and edge/mini devices (Raspberry Pi, Orange Pi, Geekom, NUC, LXC, Docker), it connects multiple chat platforms (Discord, Telegram, WhatsApp) to isolated AI agents with individual personas, shared skill pools, tool execution approval gates, cron scheduling, and a web dashboard.
+[Nouride](https://nouride.com) is an ultra-lightweight, zero-bloat multi-agent AI engine in a single binary daemon. Built for servers, homelabs, and edge/mini devices (Raspberry Pi, Orange Pi, Geekom, NUC, LXC, Docker, a Mac with Apple Silicon), it connects multiple chat platforms (Discord, Telegram, WhatsApp) to isolated AI agents with individual personas, shared skill pools, tool execution approval gates, cron scheduling, and a web dashboard.
 
 - 🌐 **Website:** [nouride.com](https://nouride.com)
 - 📖 **Documentation:** [nouride.com/docs](https://nouride.com/en/docs/start/what-is-nouride/)
@@ -44,6 +44,19 @@ curl -fsSL https://get.nouride.com/install-bundle-router.sh | sudo sh -s -- --ho
 Once installed, open `http://127.0.0.1:18254/` on that machine — or `http://<your-ip>:18254/` if you
 installed with `--host 0.0.0.0` — to complete setup. The first-run password is printed by the installer
 and in the service log (`journalctl -u nouride | grep -A6 'Nouride is ready'`).
+
+### macOS (Apple Silicon)
+
+On a Mac with Apple Silicon (M1 and later), since 0.7.20 — as yourself, **no `sudo`**:
+
+```bash
+curl -fsSL https://get.nouride.com/install.sh | sh
+# the Router variant:
+curl -fsSL https://get.nouride.com/install.sh | sh -s -- --variant router
+```
+
+It installs into `~/nouride` and runs as a LaunchAgent while you are logged in. The first-run password is in
+`~/nouride/.nouride/data/nouride.log`. Intel Macs are not a published target.
 
 ---
 
@@ -152,8 +165,9 @@ Standalone tarballs include the executable, built-in skills, example configurati
 | Linux | `aarch64` | glibc | [`nouride-linux-arm64.tar.gz`](https://get.nouride.com/latest/nouride-linux-arm64.tar.gz) |
 | Linux (Alpine) | `x86_64` | musl | [`nouride-linux-x64-musl.tar.gz`](https://get.nouride.com/latest/nouride-linux-x64-musl.tar.gz) |
 | Linux (Alpine) | `aarch64` | musl | [`nouride-linux-arm64-musl.tar.gz`](https://get.nouride.com/latest/nouride-linux-arm64-musl.tar.gz) |
+| macOS | Apple Silicon | — | [`nouride-darwin-arm64.tar.gz`](https://get.nouride.com/latest/nouride-darwin-arm64.tar.gz) |
 
-The Router variant ships the same four targets, named `nouride-router-*`:
+The Router variant ships the same targets, named `nouride-router-*`:
 
 | Platform | Architecture | C Library | Download |
 |---|---|---|---|
@@ -161,6 +175,7 @@ The Router variant ships the same four targets, named `nouride-router-*`:
 | Linux | `aarch64` | glibc | [`nouride-router-linux-arm64.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-arm64.tar.gz) |
 | Linux (Alpine) | `x86_64` | musl | [`nouride-router-linux-x64-musl.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-x64-musl.tar.gz) |
 | Linux (Alpine) | `aarch64` | musl | [`nouride-router-linux-arm64-musl.tar.gz`](https://get.nouride.com/latest/nouride-router-linux-arm64-musl.tar.gz) |
+| macOS | Apple Silicon | — | [`nouride-router-darwin-arm64.tar.gz`](https://get.nouride.com/latest/nouride-router-darwin-arm64.tar.gz) |
 
 Or let the installer fetch it:
 
