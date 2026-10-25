@@ -80,7 +80,10 @@ jobs:
         run: |
           # macOS ships LibreSSL, which cannot check an Ed25519 signature over raw bytes; the runner has OpenSSL 3.
           if [ -d /opt/homebrew/opt/openssl@3/bin ]; then export PATH="/opt/homebrew/opt/openssl@3/bin:$PATH"; fi
-          if [ "$EDITION" = basic ]; then file="nouride-${TARGET}.tar.gz"; sums=SHA256SUMS; else file="nouride-${EDITION}-${TARGET}.tar.gz"; sums="SHA256SUMS-${EDITION}"; fi
+          if [ "$EDITION" = basic ]; then file="nouride-${TARGET}.tar.gz"; suffix=""; else file="nouride-${EDITION}-${TARGET}.tar.gz"; suffix="-${EDITION}"; fi
+          # `CHECKSUMS*` from 0.8.0; a rehearsal of an older release carries its `SHA256SUMS*`.
+          sums="CHECKSUMS${suffix}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx "$sums" || sums="SHA256SUMS${suffix}"
           mkdir -p assets
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$sums" --pattern "$sums.sig" --dir assets
           # A target this release does not build is not in its checksum file: nothing to test, and said.
@@ -141,7 +144,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EDITION: ${{ matrix.edition }}
         run: |
-          if [ "$EDITION" = basic ]; then kit=nouride-image-kit.tar.gz; sums=SHA256SUMS-image-kit; else kit="nouride-image-kit-${EDITION}.tar.gz"; sums="SHA256SUMS-image-kit-${EDITION}"; fi
+          if [ "$EDITION" = basic ]; then kit=nouride-image-kit.tar.gz; suffix="-image-kit"; else kit="nouride-image-kit-${EDITION}.tar.gz"; suffix="-image-kit-${EDITION}"; fi
+          sums="CHECKSUMS${suffix}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx "$sums" || sums="SHA256SUMS${suffix}"
           mkdir -p assets kit
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$kit" --pattern "$sums" --pattern "$sums.sig" --dir assets
           sh scripts/verify-sums.sh assets

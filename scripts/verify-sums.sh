@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks that each checksum file was signed by Nouverse, and that every file it names beside it matches.
 #
-#   sh scripts/verify-sums.sh <dir>        every SHA256SUMS* in <dir>, each with its .sig, and the files they name
+#   sh scripts/verify-sums.sh <dir>        every CHECKSUMS* (SHA256SUMS* before 0.8.0) in <dir>, each with its .sig, and the files they name
 #
 # The keys are the ones compiled into Nouride and embedded in its install.sh; the private repository's tests hold
 # this copy to that one, so a key rotated there and not here fails a release there, before anything is built here.
@@ -25,7 +25,7 @@ sha256_of() {
 }
 
 found=0
-for sums in "$dir"/SHA256SUMS*; do
+for sums in "$dir"/CHECKSUMS* "$dir"/SHA256SUMS*; do
   case "$sums" in *.sig) continue ;; esac
   [ -f "$sums" ] || continue
   found=1
@@ -46,4 +46,4 @@ for sums in "$dir"/SHA256SUMS*; do
   done < "$sums"
   echo "signed: $(basename "$sums")"
 done
-[ "$found" = 1 ] || { echo "no SHA256SUMS* in $dir" >&2; exit 1; }
+[ "$found" = 1 ] || { echo "no CHECKSUMS* or SHA256SUMS* in $dir" >&2; exit 1; }
