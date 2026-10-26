@@ -2,7 +2,7 @@
 
 > Official binary releases, container images, and distribution repository for [Nouride](https://nouride.com).
 
-[Nouride](https://nouride.com) is an ultra-lightweight, zero-bloat multi-agent AI engine in a single binary daemon. Built for servers, homelabs, and edge/mini devices (Raspberry Pi, Orange Pi, Geekom, NUC, LXC, Docker, a Mac with Apple Silicon), it connects multiple chat platforms (Discord, Telegram, WhatsApp) to isolated AI agents with individual personas, shared skill pools, tool execution approval gates, cron scheduling, and a web dashboard.
+[Nouride](https://nouride.com) is an ultra-lightweight, zero-bloat multi-agent AI engine in a single binary daemon. Built for servers, homelabs, and edge/mini devices (Raspberry Pi, Orange Pi, Geekom, NUC, LXC, Docker, a Mac with Apple Silicon), it connects multiple chat platforms (Discord, Telegram, WhatsApp) to isolated AI agents with individual personas, shared skill pools, tool execution approval gates, scheduled work, long missions an agent finishes on its own, and a web dashboard.
 
 - 🌐 **Website:** [nouride.com](https://nouride.com)
 - 📖 **Documentation:** [nouride.com/docs](https://nouride.com/en/docs/start/what-is-nouride/)
@@ -40,6 +40,10 @@ curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --variant router
 # or expose on LAN:
 curl -fsSL https://get.nouride.com/install.sh | sudo sh -s -- --variant router --host 0.0.0.0
 ```
+
+To update a native install later, use the dashboard's Update page or `nouride update`. 0.8.0 starts only on data
+0.7.28 or 0.7.29 has run on: from 0.7.11 to 0.7.27 the updater offers 0.7.29 first, then 0.8.0; anything older runs the
+installer with `--version v0.7.29` once, starts it, then updates.
 
 Once installed, open `http://127.0.0.1:18254/` on that machine — or `http://<your-ip>:18254/` if you
 installed with `--host 0.0.0.0` — to complete setup. The first-run password is printed by the installer
@@ -145,6 +149,14 @@ Use `:latest`. To update, pull it again and recreate the container — the volum
 ```bash
 docker compose pull && docker compose up -d
 ```
+
+> **Upgrading to 0.8.0:** it starts only on data 0.7.28 or 0.7.29 has run on. From anything older, run the same
+> image's `0.7` tag once on the same volume (`ghcr.io/nouverse/nouride:0.7`, or `nouride-router:0.7`), wait until
+> it says it is ready, then go back to `:latest`. To check your configuration before you switch:
+>
+> ```bash
+> docker run --rm -v ./nouride:/app/.nouride ghcr.io/nouverse/nouride:latest nouride config check
+> ```
 
 To see which variant an image is without pulling it:
 
